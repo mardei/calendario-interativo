@@ -1,7 +1,7 @@
 {
   "name": "calendario-interativo",
   "productName": "Calendário Interativo",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Aplicativo de calendário interativo para controle de valores diários",
   "author": "Markin",
   "private": true,
