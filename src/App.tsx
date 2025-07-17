@@ -302,31 +302,6 @@ const App: React.FC = () => {
             Calendário {currentDate.getFullYear()}
           </h1>
           <p className="text-teal-300">Adicione valores para cada dia do mês</p>
-          
-          {/* Backup info and controls */}
-          {backupPath && (
-            <div className="mt-4 p-3 bg-slate-800/50 rounded-lg border border-teal-500/30">
-              <p className="text-sm text-cyan-200 mb-2">
-                📁 Backups automáticos salvos em: <code className="text-orange-300">{backupPath}</code>
-              </p>
-              <div className="flex justify-center gap-2">
-                <button
-                  onClick={handleExport}
-                  className="flex items-center gap-2 px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded text-sm transition-colors"
-                >
-                  <Download size={14} />
-                  Exportar Dados
-                </button>
-                <button
-                  onClick={openBackupFolder}
-                  className="flex items-center gap-2 px-3 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded text-sm transition-colors"
-                >
-                  <FolderOpen size={14} />
-                  Abrir Pasta
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Calendar container */}
