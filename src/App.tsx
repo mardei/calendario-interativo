@@ -13,6 +13,7 @@ const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [backupPath, setBackupPath] = useState<string>('');
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const [multiplier, setMultiplier] = useState<string>('');
 
   const months = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -202,6 +203,19 @@ const App: React.FC = () => {
     }, 0);
   };
 
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
+
+  const calculateMultipliedValue = () => {
+    const monthTotal = calculateMonthTotal();
+    const multiplierValue = parseFloat(multiplier.replace(/[^\d.-]/g, '')) || 0;
+    return monthTotal * multiplierValue;
+  };
+
   const handleExport = async () => {
     if (window.electronAPI) {
       try {
@@ -341,17 +355,39 @@ const App: React.FC = () => {
             {renderCalendarDays()}
           </div>
 
-          {/* Total */}
-          <div className="text-center space-y-4">
-            <h3 className="text-lg font-semibold text-white mb-2">Total do Mês</h3>
-            <p className="text-4xl font-bold text-orange-400">
-              {calculateMonthTotal()}
-            </p>
+          {/* Totals - Horizontal Layout */}
+          <div className="flex flex-wrap items-center justify-center gap-6 text-center">
+            {/* Total do Mês */}
+            <div className="flex flex-col items-center bg-slate-700/40 border border-teal-500/20 rounded-xl p-6 w-[220px] h-[120px] justify-center">
+              <h3 className="text-lg font-semibold text-white mb-2">Total do Mês</h3>
+              <p className="text-3xl font-bold text-orange-400">
+                {calculateMonthTotal()}
+              </p>
+            </div>
             
-            <div className="border-t border-teal-500/30 pt-4">
+            {/* Total do Ano */}
+            <div className="flex flex-col items-center bg-slate-700/40 border border-teal-500/20 rounded-xl p-6 w-[220px] h-[120px] justify-center">
               <h3 className="text-lg font-semibold text-white mb-2">Total do Ano {currentDate.getFullYear()}</h3>
-              <p className="text-3xl font-bold text-cyan-200">
+              <p className="text-3xl font-bold text-teal-300">
                 {calculateYearlyTotal()}
+              </p>
+            </div>
+            
+            {/* Total a pagar */}
+            <div className="flex flex-col items-center bg-slate-700/40 border border-teal-500/20 rounded-xl p-6 w-[220px] h-[120px] justify-center">
+              <div className="flex items-center gap-2 mb-2">
+                <label className="text-lg font-semibold text-white">Total a pagar:</label>
+                <input
+                  type="number"
+                  value={multiplier}
+                  onChange={(e) => setMultiplier(e.target.value)}
+                  placeholder="0"
+                  className="w-20 px-2 py-1 bg-slate-700 border border-teal-500/20 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-orange-400 text-white text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  step="0.01"
+                />
+              </div>
+              <p className="text-3xl font-bold text-green-400">
+                {formatCurrency(calculateMultipliedValue())}
               </p>
             </div>
           </div>
