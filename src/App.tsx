@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Download, Upload, FolderOpen } from 'lucide-react';
 
 interface DayValue {
   [key: string]: string;
@@ -11,6 +11,8 @@ const App: React.FC = () => {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [backupPath, setBackupPath] = useState<string>('');
+  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
 
   const months = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -19,17 +21,91 @@ const App: React.FC = () => {
 
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-  // Load data from localStorage on component mount
+  // Show notification
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  // Load data from localStorage and backup on component mount
   useEffect(() => {
-    const savedData = localStorage.getItem('calendarValues');
-    if (savedData) {
-      setDayValues(JSON.parse(savedData));
-    }
+    const loadData = async () => {
+      // Try to load from localStorage first
+      const savedData = localStorage.getItem('calendarValues');
+      let localData = savedData ? JSON.parse(savedData) : {};
+
+      // If running in Electron, try to load from backup
+      if (window.electronAPI) {
+        try {
+          const backupResult = await window.electronAPI.loadBackup();
+          if (backupResult.success && backupResult.data) {
+            // Merge backup data with local data (backup takes precedence)
+            localData = { ...localData, ...backupResult.data };
+          }
+          
+          // Get backup path for display
+          const path = await window.electronAPI.getBackupPath();
+          setBackupPath(path);
+        } catch (error) {
+          console.error('Erro ao carregar backup:', error);
+        }
+      }
+
+      setDayValues(localData);
+    };
+
+    loadData();
   }, []);
 
-  // Save data to localStorage whenever dayValues changes
+  // Save data to localStorage and backup whenever dayValues changes
   useEffect(() => {
-    localStorage.setItem('calendarValues', JSON.stringify(dayValues));
+    if (Object.keys(dayValues).length > 0) {
+      localStorage.setItem('calendarValues', JSON.stringify(dayValues));
+      
+      // Save backup if running in Electron
+      if (window.electronAPI) {
+        window.electronAPI.saveBackup(dayValues).catch(error => {
+          console.error('Erro ao salvar backup:', error);
+        });
+      }
+    }
+  }, [dayValues]);
+
+  // Setup Electron event listeners
+  useEffect(() => {
+    if (window.electronAPI) {
+      // Handle export request from menu
+      const handleExportRequest = async () => {
+        try {
+          const result = await window.electronAPI.exportData(dayValues);
+          if (result.success) {
+            showNotification('success', `Dados exportados para: ${result.path}`);
+          } else {
+            showNotification('error', `Erro ao exportar: ${result.error}`);
+          }
+        } catch (error) {
+          showNotification('error', 'Erro ao exportar dados');
+        }
+      };
+
+      // Handle import result from menu
+      const handleImportResult = (event: any, result: any) => {
+        if (result.success) {
+          setDayValues(result.data);
+          showNotification('success', 'Dados importados com sucesso!');
+        } else {
+          showNotification('error', `Erro ao importar: ${result.error}`);
+        }
+      };
+
+      window.electronAPI.onRequestDataExport(handleExportRequest);
+      window.electronAPI.onDataImportResult(handleImportResult);
+
+      return () => {
+        window.electronAPI.removeAllListeners('request-data-export');
+        window.electronAPI.removeAllListeners('data-import-result');
+      };
+    }
   }, [dayValues]);
 
   const getDaysInMonth = (date: Date) => {
@@ -126,6 +202,42 @@ const App: React.FC = () => {
     }, 0);
   };
 
+  const handleExport = async () => {
+    if (window.electronAPI) {
+      try {
+        const result = await window.electronAPI.exportData(dayValues);
+        if (result.success) {
+          showNotification('success', `Dados exportados para: ${result.path}`);
+        } else {
+          showNotification('error', `Erro ao exportar: ${result.error}`);
+        }
+      } catch (error) {
+        showNotification('error', 'Erro ao exportar dados');
+      }
+    } else {
+      // Fallback for web version
+      const dataStr = JSON.stringify({
+        data: dayValues,
+        timestamp: new Date().toISOString(),
+        version: '1.0.0'
+      }, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `calendario-backup-${new Date().toISOString().split('T')[0]}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showNotification('success', 'Dados exportados com sucesso!');
+    }
+  };
+
+  const openBackupFolder = () => {
+    if (window.electronAPI && backupPath) {
+      require('electron').shell.openPath(backupPath);
+    }
+  };
+
   const renderCalendarDays = () => {
     const daysInMonth = getDaysInMonth(currentDate);
     const firstDay = getFirstDayOfMonth(currentDate);
@@ -174,6 +286,15 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-800 via-teal-800 to-slate-900 p-8">
+      {/* Notification */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
+          notification.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+        } text-white`}>
+          {notification.message}
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -181,6 +302,31 @@ const App: React.FC = () => {
             Calendário {currentDate.getFullYear()}
           </h1>
           <p className="text-teal-300">Adicione valores para cada dia do mês</p>
+          
+          {/* Backup info and controls */}
+          {backupPath && (
+            <div className="mt-4 p-3 bg-slate-800/50 rounded-lg border border-teal-500/30">
+              <p className="text-sm text-cyan-200 mb-2">
+                📁 Backups automáticos salvos em: <code className="text-orange-300">{backupPath}</code>
+              </p>
+              <div className="flex justify-center gap-2">
+                <button
+                  onClick={handleExport}
+                  className="flex items-center gap-2 px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded text-sm transition-colors"
+                >
+                  <Download size={14} />
+                  Exportar Dados
+                </button>
+                <button
+                  onClick={openBackupFolder}
+                  className="flex items-center gap-2 px-3 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded text-sm transition-colors"
+                >
+                  <FolderOpen size={14} />
+                  Abrir Pasta
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Calendar container */}
@@ -294,5 +440,20 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+// Declare global interface for Electron API
+declare global {
+  interface Window {
+    electronAPI?: {
+      saveBackup: (data: any) => Promise<{success: boolean}>;
+      loadBackup: () => Promise<{success: boolean, data?: any}>;
+      exportData: (data: any) => Promise<{success: boolean, path?: string, error?: string}>;
+      getBackupPath: () => Promise<string>;
+      onRequestDataExport: (callback: () => void) => void;
+      onDataImportResult: (callback: (event: any, result: any) => void) => void;
+      removeAllListeners: (channel: string) => void;
+    };
+  }
+}
 
 export default App;
